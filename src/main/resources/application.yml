@@ -1,0 +1,25 @@
+spring:
+  main:
+    web-application-type: reactive
+  data:
+    mongodb:
+      uri: mongodb+srv://faviohuaman:whQVhuBsOgu0C0M4@cluster0.zkqvx.mongodb.net/msvc-prs?retryWrites=true&w=majority
+  
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:9090/realms/eduassist
+
+server:
+  port: 8081
+
+# Propiedad para la URL base del microservicio de instituciones
+institution:
+  api:
+    base-url: https://ms.institution.machashop.top/api/v1
+
+# Propiedad para la URL base del microservicio de sedes
+headquarter:
+  api:
+    base-url: https://ms.institution.machashop.top/api/v1
