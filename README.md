@@ -1,348 +1,369 @@
-# vg-ms-user
+# Documentación de Securización - Backend vg-ms-user
 
-Este microservicio es responsable de gestionar datos relacionados con usuarios, incluyendo cuentas de usuario, información de profesores, asignaciones usuario-sede y permisos dentro del sistema Valle Grande. Proporciona una API RESTful para diversas operaciones sobre estas entidades.
+## Resumen
 
-## Stack Tecnológico
+Este microservicio implementa un sistema de securización robusto basado en **Keycloak** como proveedor de identidad y **OAuth 2.0/OpenID Connect** como protocolo de autenticación. La implementación utiliza **Spring Security WebFlux** para manejar la seguridad de forma reactiva y proporciona control granular de acceso basado en roles (RBAC).
 
-Este microservicio está construido utilizando el siguiente stack tecnológico:
+---
 
--   **Lenguaje de Programación**: Java
--   **Framework**: Spring Boot
--   **Base de Datos**: MongoDB (utilizando Spring Data MongoDB Reactive)
--   **Gestor de Dependencias**: Maven
--   **Contenerización**: Docker
--   **API**: RESTful
--   **Manejo de Asincronía**: Project Reactor (evidenciado por el uso de `Mono` y `Flux` en los repositorios reactivos)
+## Arquitectura de Seguridad
 
-## Estructura del Proyecto
+### Componentes Principales
 
-El proyecto sigue un patrón de arquitectura en capas (similar a Puertos y Adaptadores o Hexagonal), organizado en paquetes distintos:
+1. **Keycloak Server**: Servidor de identidad externo que maneja autenticación y autorización
+2. **OAuth 2.0 Resource Server**: El microservicio actúa como servidor de recursos
+3. **JWT Token Validation**: Validación automática de tokens JWT
+4. **Role-Based Access Control**: Control de acceso basado en roles extraídos del JWT
 
--   **`application/service`**: Contiene la lógica de negocio principal y los casos de uso de la aplicación. Las clases aquí orquestan las operaciones sobre los modelos de dominio e interactúan con la capa de infraestructura (repositorios).
--   **`domain/model`**: Define las entidades centrales del dominio (objetos de negocio) como `User`, `Teacher`, `UserSede` y `Permission`. Son objetos Java simples que representan la estructura de los datos.
--   **`infrastructure`**: Maneja las preocupaciones externas y los detalles técnicos, incluyendo:
-    -   **`config`**: Clases de configuración para la aplicación.
-    -   **`exception`**: Clases de excepción personalizadas.
-    -   **`repository`**: Interfaces para el acceso a datos (usando Spring Data MongoDB). Spring Data proporciona las implementaciones automáticamente.
-    -   **`rest`**: Controladores REST que exponen los endpoints de la API y manejan las solicitudes y respuestas HTTP.
-    -   **`service`**: (Nota: Aunque existe un paquete 'service' directamente bajo infrastructure, los servicios de lógica de negocio principales están bajo `application/service`. Este paquete de servicio de infraestructura podría contener servicios técnicos o adaptadores).
+### Flujo de Autenticación
 
 ```
-src/main/java/pe/edu/vallegrande/vg_ms_user/
-├── domain/
-│   ├── model/
-│   │   └── Permission.java                 // Entidad que representa una nota
-│   │   └── Teacher.java                 // Entidad que representa una nota
-│   │   └── User.java                 // Entidad que representa una nota
-│   │   └── UserSede.java      // Entidad para la secuencia de IDs
-│   ├── enums/
-│   │   └── ... (otros enums del dominio, no utilizado en mi proyecto)
-│   └── repository/
-│       └── GradeRepository.java       // Interfaz para la persistencia de notas
-├── application/
-│   ├── service/
-│   │   ├── PermissionService.java      // Interfaz para la gestión de permisos
-│   │   ├── TeacherService.java         // Servicio para gestionar docentes
-│   │   ├── UserService.java            // Servicio para la gestión de usuarios y generación de IDs
-│   │   └── UserSedeService.java        // Servicio para la asignación de usuarios a sedes y roles
-│   └── impl/
-│       ├── no utilizado para mi proyecto
-├── infrastructure/
-│   ├── client/
-│   │   ├── HeadquarterClient.java     // Cliente para consumir servicios de la sede (infraestructura)
-│   │   └── InstitutionClient.java     // Cliente para consumir servicios de la institución (infraestructura)
-│   ├── config/
-│   │   ├── MongoConfig.java         // Configuración de la conexión a MongoDB
-│   │   └── WebClientConfig.java     // Configuración del WebClient para llamadas HTTP externas
-│   ├── dto/
-│   │   └── HeadquarterResponseDTO.java
-│   │   └── InstitutionResponseDTO.java
-│   ├── exception/
-│   │   └── GradeMapper.java           // Mapper entre Grade y GradeDocument
-│   ├── repository/
-│   │   ├── PermissionRepository.java   // Repositorio Spring Data MongoDB para la entidad Permission
-│   │   ├── TeacherRepository.java      // Repositorio Spring Data MongoDB para la entidad Teacher
-│   │   ├── UserRepository.java         // Repositorio Spring Data MongoDB para la entidad User
-│   │   └── UserSedeRepository.java     // Repositorio Spring Data MongoDB para la entidad UserSede
-│   ├── rest/
-│   │   ├── PermissionRest.java     // Controlador REST para la gestión de permisos
-│   │   ├── TeacherRest.java        // Controlador REST para la gestión de docentes
-│   │   ├── UserRest.java           // Controlador REST para la gestión de usuarios
-│   │   └── UserSedesRest.java      // Controlador REST para la asignación de usuarios a sedes y roles
-└── VgMsGradeManagementApplication.java  // Clase principal de la aplicación
+Cliente → Keycloak (Auth) → JWT Token → Microservicio (Validation) → Recurso Protegido
 ```
 
-## API Endpoints
+---
 
-A continuación se listan los endpoints de la API REST disponibles proporcionados por este microservicio:
+## Configuración de Seguridad
 
-### Endpoints de Usuario (`/users`)
+### 1. Configuración Principal (application.yml)
 
--   `POST /users`: Crea un nuevo usuario (individual).
-    -   Cuerpo de la Solicitud: Objeto `User`.
-    -   Ejemplo de JSON para crear un usuario:
-        ```json
-        {
-          "institutionId": "someInstitutionId",
-          "firstName": "Juan",
-          "lastName": "Perez",
-          "documentType": "DNI",
-          "documentNumber": "12345678Z",
-          "email": "juan.perez@example.com",
-          "phone": "987654321",
-          "password": "securepassword",
-          "userName": "jperez",
-          "role": "PROFESOR",
-          "view": "teacherDashboard",
-          "permissions": []
-        }
-        ```
-    -   Respuesta: Objeto `User` creado.
--   `POST /users/batch`: Crea múltiples usuarios (lote).
-    -   Cuerpo de la Solicitud: Array de objetos `User` (`List<User>`).
-    -   Ejemplo de JSON para crear usuarios en lote:
-        ```json
-        [
-          {
-            "institutionId": "inst001",
-            "firstName": "Ana",
-            "lastName": "Gomez",
-            "documentType": "DNI",
-            "documentNumber": "11223344A",
-            "email": "ana.gomez@example.com",
-            "phone": "912345678",
-            "password": "password123",
-            "userName": "agomez",
-            "role": "AUXILIAR",
-            "view": "assistantPanel"
-          },
-          {
-            "institutionId": "inst002",
-            "firstName": "Luis",
-            "lastName": "Martinez",
-            "documentType": "PASSPORT",
-            "documentNumber": "P98765432",
-            "email": "luis.martinez@example.com",
-            "phone": "987654321",
-            "password": "password456",
-            "userName": "lmartinez",
-            "role": "DIRECTOR",
-            "view": "directorView"
-          }
-        ]
-        ```
-    -   Respuesta: Array de objetos `User` creados.
--   `GET /users`: Obtiene todos los usuarios. Opcionalmente filtra por rol y estado.
-    -   Parámetros de Consulta:
-        -   `role` (opcional): Filtra por rol de usuario (ej. `PROFESOR`, `AUXILIAR`).
-        -   `status` (opcional): Filtra por estado (`active` o `inactive`).
-    -   Respuesta: Array de objetos `User`.
--   `GET /users/{id}`: Obtiene un usuario por ID.
-    -   Variable de Ruta: `id` (ID del usuario).
-    -   Respuesta: Objeto `User`.
--   `PUT /users/{id}`: Actualiza un usuario por ID.
-    -   Variable de Ruta: `id` (ID del usuario).
-    -   Cuerpo de la Solicitud: Objeto `User` actualizado.
-    -   Ejemplo de JSON para actualizar un usuario:
-        ```json
-        {
-          "institutionId": "updatedInstId",
-          "firstName": "Juan Carlos",
-          "lastName": "Perez Lopez",
-          "documentType": "DNI",
-          "documentNumber": "12345678Z",
-          "email": "juan.carlos.perez@example.com",
-          "phone": "999888777",
-          "password": "newsecurepassword",
-          "userName": "jcperez",
-          "role": "PROFESOR",
-          "view": "teacherDashboard",
-          "status": "ACTIVE",
-          "permissions": ["VER", "EDITAR"]
-        }
-        ```
-    -   Respuesta: Objeto `User` actualizado.
--   `PATCH /users/{id}/deactivate`: Desactiva lógicamente (eliminado suave) un usuario por ID.
-    -   Variable de Ruta: `id` (ID del usuario).
-    -   Respuesta: Sin contenido (204) en caso de éxito.
--   `PATCH /users/{id}/activate`: Activa (restaura) un usuario que fue desactivado lógicamente por ID.
-    -   Variable de Ruta: `id` (ID del usuario).
-    -   Respuesta: Objeto `User` activado.
--   `POST /users/{userId}/permissions/{permission}`: Añade un permiso específico a un usuario.
-    -   Variables de Ruta: `userId`, `permission`.
-    -   Respuesta: Objeto `User` actualizado.
--   `POST /users/{userId}/permissions/batch`: Añade múltiples permisos a un usuario.
-    -   Variable de Ruta: `userId`.
-    -   Cuerpo de la Solicitud: Conjunto de cadenas de permisos (`Set<String>`).
-    -   Ejemplo de JSON para añadir permisos en lote:
-        ```json
-        [
-          "CREAR",
-          "ELIMINAR"
-        ]
-        ```
-    -   Respuesta: Objeto `User` actualizado.
--   `DELETE /users/{userId}/permissions/{permission}`: Elimina un permiso específico de un usuario.
-    -   Variables de Ruta: `userId`, `permission`.
-    -   Respuesta: Objeto `User` actualizado.
--   `PUT /users/{userId}/permissions`: Establece el conjunto exacto de permisos para un usuario, reemplazando los existentes.
-    -   Variable de Ruta: `userId`.
-    -   Cuerpo de la Solicitud: Conjunto de cadenas de permisos (`Set<String>`).
-    -   Ejemplo de JSON para establecer permisos:
-        ```json
-        [
-          "VER",
-          "EDITAR",
-          "RESTAURAR"
-        ]
-        ```
-    -   Respuesta: Objeto `User` actualizado.
--   `POST /users/migrate-permissions`: Endpoint para migrar usuarios con permisos por defecto (probablemente una operación única).
-    -   Respuesta: Flux de objetos `User` actualizados.
+```yaml
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:9090/realms/eduassist
+```
 
-### Endpoints de Profesor (`/teachers`)
+**Descripción:**
+- **issuer-uri**: URL del realm de Keycloak que emite los tokens JWT
+- **eduassist**: Nombre del realm configurado en Keycloak
 
--   `POST /teachers`: Crea un nuevo profesor.
-    -   Cuerpo de la Solicitud: Objeto `Teacher`.
-    -   Ejemplo de JSON para crear un profesor:
-        ```json
-        {
-          "userId": "existingUserId123",
-          "specialty": "Matemáticas",
-          "bio": "Profesor con 10 años de experiencia en matemáticas avanzadas.",
-          "status": "ACTIVE"
-        }
-        ```
-    -   Respuesta: Objeto `Teacher` creado.
--   `GET /teachers`: Obtiene todos los profesores. Opcionalmente filtra por estado.
-    -   Parámetro de Consulta: `status` (opcional): Filtra por estado (`active` o `inactive`).
-    -   Respuesta: Array de objetos `Teacher`.
--   `GET /teachers/{id}`: Obtiene un profesor por ID.
-    -   Variable de Ruta: `id` (ID del profesor).
-    -   Respuesta: Objeto `Teacher`.
--   `PUT /teachers/{id}`: Actualiza un profesor por ID.
-    -   Variable de Ruta: `id` (ID del profesor).
-    -   Cuerpo de la Solicitud: Objeto `Teacher` actualizado.
-    -   Ejemplo de JSON para actualizar un profesor:
-        ```json
-        {
-          "userId": "existingUserId123",
-          "specialty": "Física y Matemáticas",
-          "bio": "Profesor con amplia experiencia en ciencias exactas.",
-          "status": "ACTIVE"
-        }
-        ```
-    -   Respuesta: Objeto `Teacher` actualizado.
--   `PATCH /teachers/{id}/deactivate`: Desactiva lógicamente (eliminado suave) un profesor por ID.
-    -   Variable de Ruta: `id` (ID del profesor).
-    -   Respuesta: Objeto `Teacher` activado.
--   `PATCH /teachers/{id}/activate`: Activa (restaura) un profesor que fue desactivado lógicamente por ID.
-    -   Variable de Ruta: `id` (ID del profesor).
-    -   Respuesta: Objeto `Teacher` activado.
+### 2. SecurityConfig.java
 
-### Endpoints de Usuario-Sede (`/user-sedes`)
+La clase principal de configuración de seguridad implementa:
 
--   `POST /user-sedes`: Crea una nueva asignación usuario-sede.
-    -   Cuerpo de la Solicitud: Objeto `UserSede`.
-    -   Ejemplo de JSON para crear una asignación UserSede:
-        ```json
-        {
-        "userId": "68223e570a57974d86158212",           // ID del usuario al que se asigna
-        "assignmentReason": "apoyo",                   // Motivo de la asignación
-        "observations": "usuario asignado 5",          // Observaciones adicionales
-        "status": "Activo",                            // Estado inicial ("Activo" o "Inactivo")
-        "details": [                                   // Lista de asignaciones a sedes
-            {
-            "sedeId": "s2",                            // ID de la sede
-            "sortOrder": 1,                            // Orden de prioridad
-            "role": "DIRECTOR",                        // Rol asignado en esa sede
-            "schedule": "mañana/tarde",                // Horario de trabajo
-            "assignedAt": "2025-06-08T00:00:00.000Z",  // Fecha de inicio de asignación
-            "activeUntil": "2025-07-12T00:00:00.000Z", // Fecha de fin de asignación
-            "responsibilities": ["asignacion"]         // Lista de responsabilidades
-            },
-            {
-            "sedeId": "s3",
-            "sortOrder": 2,
-            "role": "COORDINADOR",
-            "schedule": "tarde",
-            "assignedAt": "2025-06-10T00:00:00.000Z",
-            "activeUntil": "2025-08-01T00:00:00.000Z",
-            "responsibilities": ["planificación"]
-            }
-          ]
-        }
-        ```
-    -   Respuesta: Objeto `UserSede` creado.
--   `GET /user-sedes`: Obtiene todas las asignaciones usuario-sede. Opcionalmente filtra por estado.
-    -   Parámetro de Consulta: `status` (opcional): Filtra por estado (`Activo` o `Inactivo`).
-    -   Respuesta: Array de objetos `UserSede`.
--   `GET /user-sedes/{id}`: Obtiene una asignación usuario-sede por ID (solo si el estado es "Activo").
-    -   Variable de Ruta: `id` (ID de la asignación usuario-sede).
-    -   Respuesta: Objeto `UserSede`.
--   `PUT /user-sedes/{id}`: Actualiza una asignación usuario-sede por ID.
-    -   Variable de Ruta: `id` (ID de la asignación usuario-sede).
-    -   Cuerpo de la Solicitud: Objeto `UserSede` actualizado.
-    -   Ejemplo de JSON para actualizar una asignación UserSede:
-        ```json
-        {
-            "userId": "68223e570a57974d86158212",           // ID del usuario al que se asigna
-            "assignmentReason": "apoyo",                   // Motivo de la asignación
-            "observations": "usuario asignado 5",          // Observaciones adicionales
-            "status": "Activo",                            // Estado inicial ("Activo" o "Inactivo")
-            "details": [                                   // Lista de asignaciones a sedes
-                {
-                "sedeId": "s2",                            // ID de la sede
-                "sortOrder": 1,                            // Orden de prioridad
-                "role": "DIRECTOR",                        // Rol asignado en esa sede
-                "schedule": "mañana/tarde",                // Horario de trabajo
-                "assignedAt": "2025-06-08T00:00:00.000Z",  // Fecha de inicio de asignación
-                "activeUntil": "2025-07-12T00:00:00.000Z", // Fecha de fin de asignación
-                "responsibilities": ["asignacion"]         // Lista de responsabilidades
-                },
-                {
-                "sedeId": "s3",
-                "sortOrder": 2,
-                "role": "COORDINADOR",
-                "schedule": "tarde",
-                "assignedAt": "2025-06-10T00:00:00.000Z",
-                "activeUntil": "2025-08-01T00:00:00.000Z",
-                "responsibilities": ["planificación"]
-                }
-            ]
-        }
-        ```
-    -   Respuesta: Objeto `UserSede` actualizado.
--   `PATCH /user-sedes/{id}/deactivate`: Desactiva lógicamente (eliminado suave) una asignación usuario-sede por ID.
-    -   Variable de Ruta: `id` (ID de la asignación usuario-sede).
-    -   Respuesta: Sin contenido (204) en caso de éxito.
--   `PATCH /user-sedes/{id}/activate`: Activa (restaura) una asignación usuario-sede que fue desactivada lógicamente por ID.
-    -   Variable de Ruta: `id` (ID de la asignación usuario-sede).
-    -   Respuesta: Objeto `UserSede` activado.
+#### Configuración de Filtros de Seguridad
+```java
+@Bean
+public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http) {
+    return http
+        .csrf(csrf -> csrf.disable()) // CSRF deshabilitado para APIs REST
+        .oauth2ResourceServer(oauth2 -> oauth2.jwt(...)) // Configuración JWT
+        .build();
+}
+```
 
-### Endpoints de Permiso (`/permissions`)
+#### Control de Acceso por Endpoints
 
-*(Nota: Basado en la estructura de tu proyecto, podría existir un controlador `PermissionRest`. Los siguientes endpoints son inferidos basados en los endpoints de `User` relacionados con permisos. Podrías necesitar verificar/añadir endpoints reales si existe un `PermissionRest` dedicado)*
+| Endpoint Pattern | Método HTTP | Roles Requeridos | Descripción |
+|------------------|-------------|------------------|-------------|
+| `/actuator/**` | Todos | Público | Endpoints de monitoreo |
+| `/v3/api-docs/**` | Todos | Público | Documentación API |
+| `/api/v1/health` | GET | Público | Health check |
+| `/api/v1/users/**` | DELETE | ADMIN | Eliminar usuarios |
+| `/api/v1/users/**` | PUT | ADMIN, USER | Actualizar usuarios |
+| `/api/v1/users/**` | POST | ADMIN | Crear usuarios |
+| `/api/v1/users/**` | GET | ADMIN, USER | Consultar usuarios |
+| `/api/v1/permissions/**` | Todos | ADMIN | Gestión de permisos |
+| `/api/v1/teachers/**` | GET | ADMIN, USER | Consultar profesores |
+| `/api/v1/teachers/**` | POST/PUT/DELETE | ADMIN | Gestionar profesores |
+| `/api/v1/user-sedes/**` | GET | ADMIN, USER | Consultar asignaciones |
+| `/api/v1/user-sedes/**` | POST/PUT/DELETE | ADMIN | Gestionar asignaciones |
 
--   *(Potenciales endpoints en un PermissionRest dedicado, si existe:)*
-    -   `GET /permissions`: Obtiene todos los permisos disponibles.
-    -   `POST /permissions`: Crea un nuevo permiso.
-    -   `DELETE /permissions/{id}`: Elimina un permiso.
+### 3. JWT Authentication Converter
 
-## Construcción y Ejecución con Docker
+#### Extracción de Autoridades desde JWT
+```java
+private Flux<GrantedAuthority> extractAuthorities(Jwt jwt) {
+    // Extraer roles de realm_access (roles del realm)
+    // Extraer roles de resource_access (roles del cliente)
+    // Mapear roles específicos del sistema
+}
+```
 
-El proyecto incluye un `Dockerfile` para construir una imagen Docker para el microservicio.
+**Mapeo de Roles:**
+- `admin` → `ROLE_ADMIN`
+- `user` → `ROLE_USER`
+- `eduassist-*` → `ROLE_*` (roles con prefijo específico)
 
-1.  **Construir la Imagen Docker:**
-    ```bash
-    docker build -t vg-ms-user .
-    ```
-    (Este comando utiliza el wrapper `mvnw` dentro del contenedor para construir el JAR de la aplicación, como se define en el Dockerfile).
+### 4. JWT User Extractor
 
-2.  **Ejecutar el Contenedor Docker:**
-    ```bash
-    docker run -p 8080:8080 vg-ms-user
-    ```
-    (Este comando mapea el puerto 8080 de tu máquina host al puerto 8080 dentro del contenedor, donde se ejecuta la aplicación).
+Componente utilitario para extraer información del usuario autenticado:
 
-**Nota:** El Dockerfile usa `target/your-application.jar`. Asegúrate de que esto coincida con el nombre real del archivo JAR generado por Maven después de la construcción (`./mvnw clean package`).
+```java
+@Component
+public class JwtUserExtractor {
+    public Mono<String> getCurrentUserId()     // Obtiene 'sub' claim
+    public Mono<String> getCurrentUsername()   // Obtiene 'preferred_username'
+    public Mono<String> getCurrentUserEmail()  // Obtiene 'email' claim
+    public Mono<Jwt> getCurrentJwt()          // Obtiene el JWT completo
+}
+```
+
+---
+
+## Sistema de Roles y Permisos
+
+### Roles Implementados
+
+#### 1. ROLE_ADMIN (Administrador)
+**Permisos:**
+- ✅ Crear, editar, eliminar usuarios
+- ✅ Gestionar todos los profesores
+- ✅ Gestionar asignaciones usuario-sede
+- ✅ Administrar permisos del sistema
+- ✅ Acceso completo a todas las funcionalidades
+
+#### 2. ROLE_USER (Usuario)
+**Permisos:**
+- ✅ Consultar usuarios (lectura)
+- ✅ Actualizar su propio perfil
+- ✅ Consultar profesores (lectura)
+- ✅ Consultar asignaciones usuario-sede (lectura)
+- ❌ No puede crear, eliminar o gestionar otros usuarios
+
+### Permisos Granulares en Dominio
+
+Además de los roles de Spring Security, el sistema implementa permisos específicos del dominio:
+
+```java
+// Permisos por defecto según rol
+ROLE_DIRECTOR → [CREAR, EDITAR, VER, ELIMINAR, RESTAURAR]
+ROLE_PROFESOR → [VER, EDITAR]
+ROLE_AUXILIAR → [VER, EDITAR]
+DEFAULT → [VER]
+```
+
+---
+
+## Implementación de Seguridad Reactiva
+
+### WebFlux Security
+- **Filtros Reactivos**: Utiliza `SecurityWebFilterChain` para manejo asíncrono
+- **Context Holder**: `ReactiveSecurityContextHolder` para acceso al contexto de seguridad
+- **Mono/Flux**: Integración completa con programación reactiva
+
+### Ventajas de la Implementación Reactiva
+- **Performance**: Mejor manejo de concurrencia
+- **Escalabilidad**: Threads no bloqueantes
+- **Integración**: Compatibilidad completa con Spring WebFlux
+
+---
+
+## Configuración de CORS
+
+```java
+@Configuration
+public class CorsConfig {
+    @Bean
+    public CorsWebFilter corsWebFilter() {
+        // Configuración permisiva para desarrollo
+        // Permite todos los orígenes, métodos y headers
+        // Expone header 'Authorization'
+    }
+}
+```
+
+**Nota de Seguridad:** La configuración actual es permisiva para desarrollo. En producción se debe restringir a dominios específicos.
+
+---
+
+## Flujo de Validación JWT
+
+### 1. Recepción de Request
+```
+Cliente → Request con Header: Authorization: Bearer <JWT_TOKEN>
+```
+
+### 2. Validación del Token
+```java
+// Spring Security automáticamente:
+1. Extrae el token del header Authorization
+2. Valida la firma con la clave pública de Keycloak
+3. Verifica expiración y claims obligatorios
+4. Extrae roles y permisos
+```
+
+### 3. Autorización
+```java
+// Para cada endpoint protegido:
+1. Verifica si el usuario tiene el rol requerido
+2. Evalúa permisos específicos del método HTTP
+3. Permite o deniega el acceso
+```
+
+---
+
+## Configuración de Keycloak
+
+### Realm: eduassist
+- **Clients**: Frontend y backend clients configurados
+- **Users**: Usuarios con roles asignados
+- **Roles**: admin, user, eduassist-* roles
+- **Token Settings**: JWT firmado con RS256
+
+### Claims Esperados en JWT
+```json
+{
+  "sub": "usuario-id-keycloak",
+  "preferred_username": "nombreusuario",
+  "email": "usuario@ejemplo.com",
+  "realm_access": {
+    "roles": ["admin", "user", "eduassist-director"]
+  },
+  "resource_access": {
+    "eduassist": {
+      "roles": ["specific-role"]
+    }
+  }
+}
+```
+
+---
+
+## Endpoints de Seguridad
+
+### Endpoints Públicos (Sin Autenticación)
+- `GET /actuator/**` - Monitoreo de aplicación
+- `GET /v3/api-docs/**` - Documentación OpenAPI
+- `GET /swagger-ui/**` - Interfaz Swagger
+- `GET /api/v1/health` - Health check
+
+### Endpoints Protegidos
+**Requieren token JWT válido y roles específicos según la tabla de control de acceso.**
+
+---
+
+## Manejo de Errores de Seguridad
+
+### Códigos de Estado HTTP
+- **401 Unauthorized**: Token inválido o ausente
+- **403 Forbidden**: Token válido pero sin permisos suficientes
+- **404 Not Found**: Recurso no encontrado (puede enmascarar 403)
+
+### Logs de Seguridad
+Spring Security registra automáticamente:
+- Intentos de autenticación fallidos
+- Accesos denegados por falta de autorización
+- Tokens JWT inválidos
+
+---
+
+## Mejores Prácticas Implementadas
+
+### ✅ Seguridad
+- **Principio de Menor Privilegio**: Roles mínimos necesarios
+- **Separación de Responsabilidades**: Autenticación vs Autorización
+- **Validación Centralizada**: Un punto de configuración de seguridad
+- **CSRF Protection**: Deshabilitado correctamente para APIs REST
+
+### ✅ Performance
+- **Validación Asíncrona**: No bloquea threads
+- **Cache de Claves**: Spring Security cachea claves públicas de Keycloak
+- **Lazy Loading**: Roles se cargan solo cuando es necesario
+
+### ✅ Mantenibilidad
+- **Configuración Declarativa**: Roles definidos en anotaciones
+- **Separación de Concerns**: Configuración separada por responsabilidad
+- **Reutilización**: JwtUserExtractor para casos comunes
+
+---
+
+## Configuración de Desarrollo vs Producción
+
+### Desarrollo
+```yaml
+# application-dev.yml
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:9090/realms/eduassist
+```
+
+### Producción
+```yaml
+# application-prod.yml
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: https://keycloak.empresa.com/realms/eduassist
+```
+
+**Consideraciones Adicionales para Producción:**
+- Configurar CORS restrictivo
+- Habilitar HTTPS obligatorio
+- Configurar rate limiting
+- Implementar logging de auditoría detallado
+
+---
+
+## Testing de Seguridad
+
+### Unit Tests
+```java
+@Test
+@WithMockJwt(roles = "ADMIN")
+void shouldAllowAdminAccess() {
+    // Test con rol ADMIN
+}
+
+@Test
+@WithMockJwt(roles = "USER")
+void shouldDenyUserAccess() {
+    // Test con rol USER para endpoint de admin
+}
+```
+
+### Integration Tests
+- Tests con tokens JWT reales de Keycloak de prueba
+- Validación de flujos completos de autenticación
+- Verificación de autorización por endpoints
+
+---
+
+## Monitoreo y Auditoría
+
+### Métricas de Seguridad
+- Número de tokens JWT validados
+- Intentos de acceso denegados por rol
+- Tiempo de respuesta de validación JWT
+
+### Logs de Auditoría
+```
+INFO  - Usuario 'admin' accedió a GET /api/v1/users
+WARN  - Acceso denegado: Usuario 'user' intentó DELETE /api/v1/users/123
+ERROR - Token JWT inválido recibido desde IP: 192.168.1.100
+```
+
+---
+
+## Troubleshooting Común
+
+### Problema: 401 Unauthorized
+**Causas posibles:**
+- Token JWT ausente en header Authorization
+- Token expirado
+- Keycloak no disponible
+- Configuración de issuer-uri incorrecta
+
+### Problema: 403 Forbidden
+**Causas posibles:**
+- Usuario autenticado pero sin rol requerido
+- Roles mal configurados en Keycloak
+- Mapeo de roles incorrecto en extractAuthorities()
+
+### Problema: CORS Error
+**Solución:**
+- Verificar configuración en CorsConfig
+- Asegurar que el frontend envía headers correctos
+- Validar que el dominio esté en allowedOriginPatterns
+
+---
+
+*Esta documentación describe la implementación completa de securización del microservicio vg-ms-user utilizando Keycloak y Spring Security WebFlux.*
